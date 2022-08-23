@@ -9,6 +9,7 @@ allprojects {
     version = proguardVersion
     repositories {
         mavenLocal()
+        google()
     }
 }
 

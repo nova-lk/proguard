@@ -236,16 +236,16 @@ public class ProGuard
             {
                 sortClassElements();
             }
-
+            if (configuration.dump != null)
+            {
+                dump();
+            }
             if (configuration.programJars.hasOutput())
             {
                 writeOutput();
             }
 
-            if (configuration.dump != null)
-            {
-                dump();
-            }
+
         }
         catch (UpToDateChecker.UpToDateException ignore) {}
         catch (IncompleteClassHierarchyException e)

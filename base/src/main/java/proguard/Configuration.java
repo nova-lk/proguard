@@ -22,7 +22,7 @@ package proguard;
 
 import java.io.File;
 import java.net.URL;
-import java.util.*;
+import java.util.List;
 
 /**
  * The ProGuard configuration.
@@ -69,7 +69,7 @@ public class Configuration
      * names may contain "**", "*", or "?" wildcards, and they may be preceded
      * by the "!" negator.
      */
-    public List                         keepDirectories;
+    public List<String>                         keepDirectories;
 
     /**
      * A list of String instances specifying a filter for files that should
@@ -201,7 +201,7 @@ public class Configuration
     public boolean                      mergeInterfacesAggressively      = false;
 
     ///////////////////////////////////////////////////////////////////////////
-    // Obfuscation options.
+    // Obfuscation options.writer
     ///////////////////////////////////////////////////////////////////////////
 
     /**
@@ -328,7 +328,9 @@ public class Configuration
     /**
      * Specifies whether the code should be targeted at the Android platform.
      */
-    public boolean                      android                          = false;
+    public boolean                      android                          = true;
+
+    public boolean                      dalvik                           = true;
 
     ///////////////////////////////////////////////////////////////////////////
     // Jar signing options.

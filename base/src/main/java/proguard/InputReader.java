@@ -22,19 +22,45 @@ package proguard;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import proguard.classfile.*;
 import proguard.classfile.kotlin.KotlinConstants;
-import proguard.classfile.util.*;
-import proguard.classfile.visitor.*;
-import proguard.io.*;
+import proguard.classfile.util.WarningLogger;
+import proguard.classfile.util.WarningPrinter;
+import proguard.classfile.visitor.ClassPoolFiller;
+import proguard.classfile.visitor.ClassPresenceFilter;
+import proguard.classfile.visitor.ClassVisitor;
+import proguard.classfile.visitor.MultiClassVisitor;
+import proguard.classfile.visitor.ProgramClassFilter;
+import proguard.dexfile.writer.AndroidConstants;
+import proguard.io.ClassFilter;
+import proguard.io.ClassReader;
+import proguard.io.DataEntryNameFilter;
+import proguard.io.DataEntryReader;
+import proguard.io.DataEntrySource;
+import proguard.io.DexClassReader;
+import proguard.io.DirectorySource;
+import proguard.io.NameFilteredDataEntryReader;
 import proguard.pass.Pass;
-import proguard.resources.file.*;
+import proguard.resources.file.ResourceFile;
 import proguard.resources.file.io.ResourceFileDataEntryReader;
-import proguard.resources.file.visitor.*;
+import proguard.resources.file.visitor.MultiResourceFileVisitor;
+import proguard.resources.file.visitor.ResourceFilePoolFiller;
+import proguard.resources.file.visitor.ResourceFilePresenceFilter;
+import proguard.resources.file.visitor.ResourceFileVisitor;
 import proguard.resources.kotlinmodule.io.KotlinModuleDataEntryReader;
-import proguard.util.*;
+import proguard.util.FileNameParser;
+import proguard.util.ListParser;
+import proguard.util.ProcessingFlagSetter;
+import proguard.util.ProcessingFlags;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * This pass reads the input class files.
@@ -121,17 +147,36 @@ public class InputReader implements Pass
                 new ResourceFilePoolFiller(appView.resourceFilePool),
                 new MyResourceFileFeatureNameSetter()));
 
-        DataEntryReader resourceReader =
-            new ResourceFileDataEntryReader(resourceFilePoolFiller,
-                                            adaptedDataEntryFilter);
+        DataEntryReader resourceFileDataEntryReader =
+                new ResourceFileDataEntryReader(resourceFilePoolFiller,
+                        adaptedDataEntryFilter);
 
-        if (configuration.keepKotlinMetadata)
-        {
-            resourceReader =
-                new NameFilteredDataEntryReader(KotlinConstants.MODULE.FILE_EXPRESSION,
-                    new KotlinModuleDataEntryReader(resourceFilePoolFiller),
-                    resourceReader);
-        }
+        ResourceFileVisitor dontShrinkResourceFilePoolFiller =
+                new MultiResourceFileVisitor(
+                        resourceFilePoolFiller,
+                        new ProcessingFlagSetter(ProcessingFlags.DONT_SHRINK)
+                );
+
+        DataEntryReader dontShrinkResourceFileDataEntryReader =
+                        new ResourceFileDataEntryReader(dontShrinkResourceFilePoolFiller,
+                                adaptedDataEntryFilter);
+
+        DataEntryReader dexReader =
+                new NameFilteredDataEntryReader(
+                        "classes*.dex",
+                        new DexClassReader(
+                                true,
+                                classPoolFiller
+                        )
+                );
+
+        DataEntryReader resourceReader =
+                        new NameFilteredDataEntryReader(AndroidConstants.CLASSES_DEX_EXPRESSION,
+                                dexReader,
+                                dontShrinkResourceFileDataEntryReader) ;
+
+        // Detect compression of the inputs.
+        determineCompressionMethod(configuration.programJars);
 
         // Read the program class files and resource files and put them in the
         // program class pool and resource file pool.
@@ -268,6 +313,73 @@ public class InputReader implements Pass
             throw new IOException("Can't read [" + classPathEntry + "] (" + ex.getMessage() + ")", ex);
         }
     }
+
+    protected void determineCompressionMethod(ClassPath classPath)
+    {
+        for (int index = 0; index < classPath.size(); index++)
+        {
+            ClassPathEntry entry = classPath.get(index);
+            if (!entry.isOutput())
+            {
+                determineCompressionMethod(entry);
+            }
+        }
+    }
+
+
+    private void determineCompressionMethod(ClassPathEntry entry)
+    {
+        File file = entry.getFile();
+        if (file == null || file.isDirectory())
+        {
+            return;
+        }
+
+        String regexDexClasses = "classes*.dex";
+
+        try (ZipFile zip = new ZipFile(file))
+        {
+            Enumeration<? extends ZipEntry> entries = zip.entries();
+
+            Set<String> storedEntries = new TreeSet<>();
+
+            if (configuration.dontCompress != null)
+            {
+                storedEntries.addAll(configuration.dontCompress);
+            }
+
+            while (entries.hasMoreElements())
+            {
+                ZipEntry zipEntry = entries.nextElement();
+                if (zipEntry.getMethod() == ZipEntry.DEFLATED)
+                {
+                    continue;
+                }
+
+                String name = zipEntry.getName();
+
+                // Special case for classes.dex: If we end up creating another dex file, we want all dex files compression to be consistent.
+                if (name.matches("classes\\d*.dex"))
+                {
+                    storedEntries.add(regexDexClasses);
+                }
+                else
+                {
+                    storedEntries.add(name);
+                }
+            }
+
+            if (!storedEntries.isEmpty())
+            {
+                configuration.dontCompress = new ArrayList<>(storedEntries);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.warn("Could not determine compression method for entries of: " + file.getAbsolutePath() + ". You may need to add -dontcompress rules manually for this file.", e);
+        }
+    }
+
 
 
     /**

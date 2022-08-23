@@ -15,8 +15,8 @@ import proguard.resources.file.ResourceFilePool;
 public class AppView
 {
     // App model.
-    public final ClassPool             programClassPool;
-    public final ClassPool             libraryClassPool;
+    public ClassPool             programClassPool;
+    public ClassPool             libraryClassPool;
     public final ResourceFilePool      resourceFilePool;
 
     public final ExtraDataEntryNameMap extraDataEntryNameMap;
