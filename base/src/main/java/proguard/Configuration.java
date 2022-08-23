@@ -328,7 +328,7 @@ public class Configuration
     /**
      * Specifies whether the code should be targeted at the Android platform.
      */
-    public boolean                      android                          = true;
+    public boolean                      android                          = false;
 
     public boolean                      dalvik                           = true;
 

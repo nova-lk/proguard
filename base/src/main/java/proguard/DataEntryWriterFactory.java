@@ -23,8 +23,6 @@ package proguard;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import proguard.classfile.*;
-import proguard.dexfile.writer.AndroidConstants;
-import proguard.dexfile.writer.DexDataEntryWriterFactory;
 import proguard.io.*;
 import proguard.resources.file.ResourceFilePool;
 import proguard.util.*;
@@ -73,35 +71,34 @@ public class DataEntryWriterFactory
     private final boolean                    mergeBundleJars;
     private final KeyStore.PrivateKeyEntry[] privateKeyEntries;
     private final boolean                    verbose;
-    private final boolean dalvik;
-    private final DexDataEntryWriterFactory dexDataEntryWriterFactory;
-    private Map<File,DataEntryWriter> jarWriterCache = new HashMap<>();
+
+    private Map<File,DataEntryWriter> jarWriterCache = new HashMap();
+    private DexDataEntryWriterFactory dexDataEntryWriterFactory;
 
 
     /**
      * Creates a new DataEntryWriterFactory.
      *
-     * @param programClassPool      the program class pool to process.
-     * @param resourceFilePool      the resource file pool to process.
-     * @param modificationTime      the modification date and time of
-     *                              the zip entries, in DOS
-     *                              format.
-     * @param uncompressedFilter    an optional filter for files that
-     *                              should not be compressed.
-     * @param uncompressedAlignment the desired alignment for the data
-     *                              of uncompressed entries.
-     * @param pageAlignNativeLibs   specifies whether to align native
-     *                              libraries at page boundaries.
-     * @param mergeBundleJars       specifies whether to merge all jars
-     *                              in an Android app bundle into a
-     *                              single jar.
-     * @param privateKeyEntries     optional private keys to sign jars.
-     * @param verbose               specifies if verbose messages should be emitted when
-     *                              creating the DataEntryWriter.
+     * @param programClassPool          the program class pool to process.
+     * @param resourceFilePool          the resource file pool to process.
+     * @param modificationTime          the modification date and time of
+     *                                  the zip entries, in DOS
+     *                                  format.
+     * @param uncompressedFilter        an optional filter for files that
+     *                                  should not be compressed.
+     * @param uncompressedAlignment     the desired alignment for the data
+     *                                  of uncompressed entries.
+     * @param pageAlignNativeLibs       specifies whether to align native
+     *                                  libraries at page boundaries.
+     * @param mergeBundleJars           specifies whether to merge all jars
+     *                                  in an Android app bundle into a
+     *                                  single jar.
+     * @param privateKeyEntries         optional private keys to sign jars.
+     * @param verbose                   specifies if verbose messages should be emitted when
+     *                                  creating the DataEntryWriter.
+     * @param dexDataEntryWriterFactory
      */
     public DataEntryWriterFactory(ClassPool                  programClassPool,
-                                  boolean                    dalvik,
-                                  DexDataEntryWriterFactory  dexDataEntryWriterFactory,
                                   ResourceFilePool           resourceFilePool,
                                   int                        modificationTime,
                                   StringMatcher              uncompressedFilter,
@@ -109,11 +106,10 @@ public class DataEntryWriterFactory
                                   boolean                    pageAlignNativeLibs,
                                   boolean                    mergeBundleJars,
                                   KeyStore.PrivateKeyEntry[] privateKeyEntries,
-                                  boolean                    verbose)
+                                  boolean                    verbose,
+                                  DexDataEntryWriterFactory dexDataEntryWriterFactory)
     {
         this.programClassPool      = programClassPool;
-        this.dalvik                = dalvik;
-        this.dexDataEntryWriterFactory = dexDataEntryWriterFactory;
         this.resourceFilePool      = resourceFilePool;
         this.modificationTime      = modificationTime;
         this.uncompressedFilter    = uncompressedFilter;
@@ -122,6 +118,7 @@ public class DataEntryWriterFactory
         this.mergeBundleJars       = mergeBundleJars;
         this.privateKeyEntries     = privateKeyEntries;
         this.verbose = verbose;
+        this.dexDataEntryWriterFactory = dexDataEntryWriterFactory;
     }
 
 
@@ -204,150 +201,139 @@ public class DataEntryWriterFactory
                                                        DataEntryWriter alternativeWriter,
                                                        DataEntryWriter extraDataEntryWriter,
                                                        boolean         addCheckingJarWriter,
-                                                       boolean         closeCachedJarWriter) {
+                                                       boolean         closeCachedJarWriter)
+    {
         File file = classPathEntry.getFile();
 
-        boolean isDex = classPathEntry.isDex();
-        boolean isApk = classPathEntry.isApk();
-        boolean isAab = classPathEntry.isAab();
-        boolean isJar = classPathEntry.isJar();
-        boolean isAar = classPathEntry.isAar();
-        boolean isWar = classPathEntry.isWar();
-        boolean isEar = classPathEntry.isEar();
+        boolean isApk  = classPathEntry.isApk();
+        boolean isAab  = classPathEntry.isAab();
+        boolean isJar  = classPathEntry.isJar();
+        boolean isAar  = classPathEntry.isAar();
+        boolean isWar  = classPathEntry.isWar();
+        boolean isEar  = classPathEntry.isEar();
         boolean isJmod = classPathEntry.isJmod();
-        boolean isZip = classPathEntry.isZip();
+        boolean isZip  = classPathEntry.isZip();
 
-        List<String> filter = DataEntryReaderFactory.getFilterExcludingVersionedClasses(classPathEntry);
-        List<String> apkFilter = classPathEntry.getApkFilter();
-        List<String> aabFilter = classPathEntry.getAabFilter();
-        List<String> jarFilter = classPathEntry.getJarFilter();
-        List<String> aarFilter = classPathEntry.getAarFilter();
-        List<String> warFilter = classPathEntry.getWarFilter();
-        List<String> earFilter = classPathEntry.getEarFilter();
-        List<String> jmodFilter = classPathEntry.getJmodFilter();
-        List<String> zipFilter = classPathEntry.getZipFilter();
+        List filter     = DataEntryReaderFactory.getFilterExcludingVersionedClasses(classPathEntry);
+        List apkFilter  = classPathEntry.getApkFilter();
+        List aabFilter  = classPathEntry.getAabFilter();
+        List jarFilter  = classPathEntry.getJarFilter();
+        List aarFilter  = classPathEntry.getAarFilter();
+        List warFilter  = classPathEntry.getWarFilter();
+        List earFilter  = classPathEntry.getEarFilter();
+        List jmodFilter = classPathEntry.getJmodFilter();
+        List zipFilter  = classPathEntry.getZipFilter();
 
         logger.info("Preparing {}output {} [{}]{}",
-                privateKeyEntries == null ? "" : "signed ",
-                (isApk ? "apk" :
-                        isAab ? "aab" :
-                                isJar ? "jar" :
-                                        isAar ? "aar" :
-                                                isWar ? "war" :
-                                                        isEar ? "ear" :
-                                                                isJmod ? "jmod" :
-                                                                        isZip ? "zip" :
-                                                                                "directory"),
-                classPathEntry.getName(),
-                (filter != null ||
-                        apkFilter != null ||
-                        aabFilter != null ||
-                        jarFilter != null ||
-                        aarFilter != null ||
-                        warFilter != null ||
-                        earFilter != null ||
-                        jmodFilter != null ||
-                        zipFilter != null ? " (filtered)" : "")
+                   privateKeyEntries == null ? "" : "signed ",
+                   (isApk  ? "apk"  :
+                    isAab  ? "aab"  :
+                    isJar  ? "jar"  :
+                    isAar  ? "aar"  :
+                    isWar  ? "war"  :
+                    isEar  ? "ear"  :
+                    isJmod ? "jmod" :
+                    isZip  ? "zip"  :
+                             "directory"),
+                   classPathEntry.getName(),
+                   (filter     != null ||
+                    apkFilter  != null ||
+                    aabFilter  != null ||
+                    jarFilter  != null ||
+                    aarFilter  != null ||
+                    warFilter  != null ||
+                    earFilter  != null ||
+                    jmodFilter != null ||
+                    zipFilter  != null ? " (filtered)" : "")
         );
 
         // Create the writer for the main file or directory.
         DataEntryWriter writer =
-                isApk ||
-                        isAab ||
-                        isJar ||
-                        isAar ||
-                        isWar ||
-                        isEar ||
-                        isJmod ||
-                        isZip ?
-                        new FixedFileWriter(file) :
-                        new DirectoryWriter(file);
+            isApk  ||
+            isAab  ||
+            isJar  ||
+            isAar  ||
+            isWar  ||
+            isEar  ||
+            isJmod ||
+            isZip ?
+                new FixedFileWriter(file) :
+                new DirectoryWriter(file);
 
-        if (isDex) {
-            // A dex file can't contain resource files.
-            writer =
-                    new FilteredDataEntryWriter(
-                            new DataEntryNameFilter(
-                                    new ExtensionMatcher(AndroidConstants.DEX_FILE_EXTENSION)),
-                            writer);
+        // If the output is an archive, we'll flatten (unpack the contents of)
+        // higher level input archives, e.g. when writing into a jar file, we
+        // flatten zip files.
+        boolean flattenApks  = false;
+        boolean flattenAabs  = flattenApks  || isApk;
+        boolean flattenJars  = flattenAabs  || isAab;
+        boolean flattenAars  = flattenJars  || isJar;
+        boolean flattenWars  = flattenAars  || isAar;
+        boolean flattenEars  = flattenWars  || isWar;
+        boolean flattenJmods = flattenEars  || isEar;
+        boolean flattenZips  = flattenJmods || isJmod;
 
-        }
-        else
+        // Set up the filtered jar writers.
+        writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenZips,  isZip,  false, ".zip",  zipFilter,  null,        false, null);
+        writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenJmods, isJmod, false, ".jmod", jmodFilter, JMOD_HEADER, false, JMOD_PREFIXES);
+        writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenEars,  isEar,  false, ".ear",  earFilter,  null,        false, null);
+        writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenWars,  isWar,  false, ".war",  warFilter,  null,        false, WAR_PREFIXES);
+        writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenAars,  isAar,  false, ".aar",  aarFilter,  null,        false, null);
+
+        if (isAar && mergeBundleJars)
         {
-            // If the output is an archive, we'll flatten (unpack the contents of)
-            // higher level input archives, e.g. when writing into a jar file, we
-            // flatten zip files.
-            boolean flattenApks = false;
-            boolean flattenAabs = flattenApks || isApk;
-            boolean flattenJars = flattenAabs || isAab;
-            boolean flattenAars = flattenJars || isJar;
-            boolean flattenWars = flattenAars || isAar;
-            boolean flattenEars = flattenWars || isWar;
-            boolean flattenJmods = flattenEars || isEar;
-            boolean flattenZips = flattenJmods || isJmod;
-
-            // Set up the filtered jar writers.
-            writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenZips, isZip, false, ".zip", zipFilter, null, false, null);
-            writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenJmods, isJmod, false, ".jmod", jmodFilter, JMOD_HEADER, false, JMOD_PREFIXES);
-            writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenEars, isEar, false, ".ear", earFilter, null, false, null);
-            writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenWars, isWar, false, ".war", warFilter, null, false, WAR_PREFIXES);
-            writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenAars, isAar, false, ".aar", aarFilter, null, false, null);
-
-            if (isAar && mergeBundleJars) {
-                // If we're writing an obfuscated AAR, all input jars need to
-                // be merged into a final classes.jar file.
-                writer =
-                        new FilteredDataEntryWriter(new DataEntryNameFilter(new ExtensionMatcher(".jar")),
-                                new RenamedDataEntryWriter(new ConstantStringFunction("classes.jar"), writer),
-                                writer);
-            }
-
-            writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenJars, isJar, false, ".jar", jarFilter, null, false, null);
-
-            // Either we create an aab or apk; they can not be nested.
-            writer = isAab ?
-                    wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenAabs, isAab, true, ".aab", aabFilter, null, false, null) :
-                    wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenApks, isApk, false, ".apk", apkFilter, null, pageAlignNativeLibs, null);
-
-            // Create a writer for plain class files. Don't close the enclosed
-            // writer through it, but let it be closed later on.
-            DataEntryWriter classWriter =
-                    new ClassDataEntryWriter(programClassPool,
-                            new NonClosingDataEntryWriter(writer));
-
-            // Add a renaming filter, if specified.
-            if (filter != null) {
-                WildcardManager wildcardManager = new WildcardManager();
-
-                StringFunction fileNameFunction =
-                        new ListFunctionParser(
-                                new SingleFunctionParser(
-                                        new FileNameParser(wildcardManager), wildcardManager)).parse(filter);
-
-                // Slight asymmetry: we filter plain class files beforehand,
-                // but we filter and rename dex files and resource files after
-                // creating and renaming them in the feature structure.
-                // We therefore don't filter class files that go into dex
-                // files.
-                classWriter = new RenamedDataEntryWriter(fileNameFunction, classWriter);
-                writer = new RenamedDataEntryWriter(fileNameFunction, writer);
-            }
-
+            // If we're writing an obfuscated AAR, all input jars need to
+            // be merged into a final classes.jar file.
             writer =
-                    // Filter on class files.
-                    new NameFilteredDataEntryWriter(
-                            new ExtensionMatcher(ClassConstants.CLASS_FILE_EXTENSION),
-                            // Collect and write out dex files or class files.
-                            // The dex files may still be renamed afterwards.
-                            dalvik ?
-                                    dexDataEntryWriterFactory.wrapInDexWriter(writer) :
-                                    classWriter,
-                            writer);
+                new FilteredDataEntryWriter(new DataEntryNameFilter(new ExtensionMatcher(".jar")),
+                new RenamedDataEntryWriter(new ConstantStringFunction("classes.jar"), writer),
+                    writer);
+        }
 
-    }
+        writer = wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenJars,  isJar,  false, ".jar",  jarFilter,  null,        false, null);
+
+        // Either we create an aab or apk; they can not be nested.
+        writer = isAab ?
+            wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenAabs, isAab, true,  ".aab", aabFilter, null, false,               null) :
+            wrapInJarWriter(file, writer, extraDataEntryWriter, closeCachedJarWriter, flattenApks, isApk, false, ".apk", apkFilter, null, pageAlignNativeLibs, null);
+
+        // Create a writer for plain class files. Don't close the enclosed
+        // writer through it, but let it be closed later on.
+        DataEntryWriter classWriter =
+            new ClassDataEntryWriter(programClassPool,
+            new NonClosingDataEntryWriter(writer));
+
+        // Add a renaming filter, if specified.
+        if (filter != null)
+        {
+            WildcardManager wildcardManager = new WildcardManager();
+
+            StringFunction fileNameFunction =
+                new ListFunctionParser(
+                new SingleFunctionParser(
+                new FileNameParser(wildcardManager), wildcardManager)).parse(filter);
+
+            // Slight asymmetry: we filter plain class files beforehand,
+            // but we filter and rename dex files and resource files after
+            // creating and renaming them in the feature structure.
+            // We therefore don't filter class files that go into dex
+            // files.
+            classWriter = new RenamedDataEntryWriter(fileNameFunction, classWriter);
+            writer      = new RenamedDataEntryWriter(fileNameFunction, writer);
+        }
+
+        writer =
+            // Filter on class files.
+            new NameFilteredDataEntryWriter(
+            new ExtensionMatcher(ClassConstants.CLASS_FILE_EXTENSION),
+                    dexDataEntryWriterFactory != null ?
+                        dexDataEntryWriterFactory.wrapInDexWriter(writer) :
+                        classWriter,
+                writer);
 
         // Let the writer cascade, if specified.
-        return writer;
+        return alternativeWriter != null ?
+            new CascadingDataEntryWriter(writer, alternativeWriter) :
+            writer;
     }
 
 
@@ -363,7 +349,7 @@ public class DataEntryWriterFactory
                                             boolean         isJar,
                                             boolean         isAab,
                                             String          jarFilterExtension,
-                                            List<String>    jarFilter,
+                                            List            jarFilter,
                                             byte[]          jarHeader,
                                             boolean         pageAlignNativeLibs,
                                             String[][]      prefixes)

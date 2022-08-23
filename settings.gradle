@@ -22,6 +22,6 @@ include 'ant'
 include 'annotations'
 
 project(':gradle-plugin').name = 'gradle'
-includeBuild("/home/pramitha/SmaliTool/proguard-core"){
+includeBuild("../proguard-core-nova-lk"){
     it.name = 'proguard-core'
 }

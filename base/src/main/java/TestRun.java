@@ -8,15 +8,6 @@ import proguard.Configuration;
 import proguard.InputReader;
 import proguard.OutputWriter;
 import proguard.classfile.ClassPool;
-import proguard.classfile.visitor.ClassPrinter;
-import proguard.dexfile.writer.DexDataEntryWriter;
-import proguard.io.DataEntryClassWriter;
-import proguard.io.DataEntryNameFilter;
-import proguard.io.DataEntryWriter;
-import proguard.io.DirectoryWriter;
-import proguard.io.FilteredDataEntryWriter;
-import proguard.io.FixedFileWriter;
-import proguard.util.ExtensionMatcher;
 
 import java.io.File;
 import java.io.IOException;

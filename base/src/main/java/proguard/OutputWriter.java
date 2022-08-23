@@ -22,7 +22,6 @@ package proguard;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.jf.dexlib2.dexbacked.DexReader;
 import proguard.classfile.ClassPool;
 import proguard.classfile.Clazz;
 import proguard.classfile.io.visitor.ProcessingFlagDataEntryFilter;
@@ -31,54 +30,20 @@ import proguard.classfile.util.ClassUtil;
 import proguard.classfile.visitor.ClassPoolFiller;
 import proguard.configuration.ConfigurationLogger;
 import proguard.configuration.InitialStateInfo;
-import proguard.dexfile.writer.DexDataEntryWriterFactory;
-import proguard.io.ClassFilter;
-import proguard.io.ClassMapDataEntryReplacer;
-import proguard.io.DataEntry;
-import proguard.io.DataEntryClassWriter;
-import proguard.io.DataEntryCopier;
-import proguard.io.DataEntryDirectoryFilter;
-import proguard.io.DataEntryReader;
-import proguard.io.DataEntryRewriter;
-import proguard.io.DataEntryWriter;
-import proguard.io.DexClassReader;
-import proguard.io.DirectoryFilter;
-import proguard.io.ExtraDataEntryNameMap;
-import proguard.io.ExtraDataEntryReader;
-import proguard.io.FilteredDataEntryWriter;
-import proguard.io.IdleRewriter;
-import proguard.io.ManifestRewriter;
-import proguard.io.NameFilteredDataEntryReader;
-import proguard.io.NameFilteredDataEntryWriter;
-import proguard.io.NonClosingDataEntryWriter;
-import proguard.io.RenamedDataEntry;
-import proguard.io.RenamedDataEntryReader;
-import proguard.io.RenamedDataEntryWriter;
-import proguard.io.UniqueDataEntryWriter;
+import proguard.io.DexDataEntryWriterFactory;
+import proguard.io.*;
 import proguard.pass.Pass;
 import proguard.resources.file.ResourceFilePool;
 import proguard.resources.file.util.ResourceFilePoolNameFunction;
 import proguard.resources.kotlinmodule.io.KotlinModuleDataEntryWriter;
-import proguard.util.FileNameParser;
-import proguard.util.ListParser;
-import proguard.util.MapStringFunction;
-import proguard.util.ProcessingFlags;
-import proguard.util.StringFunction;
-import proguard.util.StringMatcher;
+import proguard.util.*;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
+import java.security.*;
 import java.security.cert.X509Certificate;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 
 /**
@@ -134,19 +99,20 @@ public class OutputWriter implements Pass
              currentDate.getMinutes()     << 5  |
              currentDate.getSeconds()     >> 1;
 
+        // Create a data entry writer factory for dex files.
         DexDataEntryWriterFactory dexDataEntryWriterFactory =
                 configuration.dalvik ?
                         new DexDataEntryWriterFactory(appView.programClassPool,
+                                configuration.libraryJars,
                                 false,
-                                null
-                                ) :
+                                1,
+                                1,
+                                false,
+                                null) :
                         null;
-
         // Create a main data entry writer factory for all nested archives.
         DataEntryWriterFactory dataEntryWriterFactory =
             new DataEntryWriterFactory(appView.programClassPool,
-                                       true,
-                                       dexDataEntryWriterFactory,
                                        appView.resourceFilePool,
                                        modificationTime,
                                        uncompressedFilter,
@@ -154,7 +120,9 @@ public class OutputWriter implements Pass
                                        configuration.android, //resourceInfo.pageAlignNativeLibs,
                                        configuration.obfuscate,
                                        privateKeyEntries,
-                                       configuration.verbose);
+                                       configuration.verbose,
+                                       dexDataEntryWriterFactory);
+
 
         DataEntryWriter extraDataEntryWriter = null;
         if (configuration.extraJar != null)
@@ -349,7 +317,7 @@ public class OutputWriter implements Pass
                                                              toOutputIndex,
                                                              null);
 
-//            DataEntryWriter resourceWriter = writer;
+            DataEntryWriter resourceWriter = writer;
 
             // Adapt plain resource file names that correspond to class names,
             // if necessary.
@@ -357,26 +325,26 @@ public class OutputWriter implements Pass
                 configuration.adaptResourceFileNames != null)
             {
                 // Rename processed general resources.
-                writer =
+                resourceWriter =
                     renameResourceFiles(resourceFilePool,
-                            writer);
+                                        resourceWriter);
             }
 
             if (configuration.keepKotlinMetadata &&
                 (configuration.shrink ||
                  configuration.obfuscate))
             {
-                writer =
+                resourceWriter =
                     new NameFilteredDataEntryWriter(KotlinConstants.MODULE.FILE_EXPRESSION,
                     new FilteredDataEntryWriter(
                         new ProcessingFlagDataEntryFilter(resourceFilePool, 0, ProcessingFlags.DONT_PROCESS_KOTLIN_MODULE),
-                        new KotlinModuleDataEntryWriter(resourceFilePool, writer)),
-                            writer);
+                        new KotlinModuleDataEntryWriter(resourceFilePool, resourceWriter)),
+                        resourceWriter);
             }
 
             // By default, just copy resource files into the above writers.
             DataEntryReader resourceCopier =
-                new DataEntryCopier(writer);
+                new DataEntryCopier(resourceWriter);
 
             // We're now switching to the reader side, operating on the
             // contents possibly parsed from the input streams.
@@ -389,6 +357,16 @@ public class OutputWriter implements Pass
                 configuration.adaptResourceFileContents != null)
             {
                 DataEntryReader adaptingContentWriter = resourceRewriter;
+
+                // Adapt the contents of general resource files (manifests
+                // and native libraries).
+                if (configuration.obfuscate)
+                {
+                    adaptingContentWriter =
+                        adaptResourceFiles(configuration,
+                                           programClassPool,
+                                           resourceWriter);
+                }
 
                 // Add the overall filter for adapting resource file contents.
                 resourceRewriter =
@@ -411,7 +389,7 @@ public class OutputWriter implements Pass
                                              initialStateInfo,
                                              extraDataEntryNameMap,
                                              reader,
-                                             writer);
+                                             extraDataEntryWriter != null ? extraDataEntryWriter : writer);
 
             // Write classes.
             DataEntryReader classReader = new ClassFilter(new IdleRewriter(writer), reader);
@@ -419,33 +397,30 @@ public class OutputWriter implements Pass
             // Write classes attached as extra data entries.
             DataEntryReader extraClassReader = extraDataEntryWriter != null ?
                     new ClassFilter(new IdleRewriter(extraDataEntryWriter), reader) :
-                    reader;
+                    classReader;
+
+            // Write any attached data entries.
+            reader = new ExtraDataEntryReader(extraDataEntryNameMap, classReader, extraClassReader);
 
             if (configuration.dalvik)
             {
                 // Trigger writing classes loaded from dex files
                 // without converting the code attributes again.
-
                 reader =
-//                        new NameFilteredDataEntryReader("!" + APK_RES_FILE_EXPRESSION +
-//                                ",!" + APK_ASSETS_FILE_EXPRESSION +
-//                                "," + DEX_EXPRESSION,
-//                                new DexClassReader(false, reader),
-//                                reader);
-                        new NameFilteredDataEntryReader(
-                                "classes*.dex",
-                                dataEntry -> {
-                                    ClassPool classPool = new ClassPool();
-                                    new DexClassReader(false, new ClassPoolFiller(classPool)).read(dataEntry);
-                                    for (Clazz programClass : classPool.classes())
-                                    {
-                                        classReader.read(new RenamedDataEntry(dataEntry, programClass.getName() + ".class"));
-                                    }
-                                },
-                                classReader
-                        );
+                    new NameFilteredDataEntryReader(
+                            "classes*.dex",
+                            dataEntry ->
+                            {
+                                ClassPool classPool = new ClassPool();
+                                new DexClassReader(false, new ClassPoolFiller(classPool)).read(dataEntry);
+                                for (Clazz programClass : classPool.classes())
+                                {
+                                    classReader.read(new RenamedDataEntry(dataEntry, programClass.getName() + ".class"));
+                                }
+                            },
+                            classReader
+                    );
             }
-
             // Go over the specified input entries and write their processed
             // versions.
             new InputReader(configuration).readInput("  Copying resources from program ",
@@ -582,30 +557,4 @@ public class OutputWriter implements Pass
 
         return packagePrefixMap;
     }
-
-
-    /**
-     * Returns a reader that adapts the contents of specified resource files
-     * and writes them to the given writer, delegating all other resources
-     * to the given resource copier.
-     */
-    private DataEntryReader adaptResourceFileContents(Configuration   configuration,
-                                                      ClassPool       programClassPool,
-                                                      DataEntryReader resourceCopier,
-                                                      DataEntryWriter resourceWriter)
-    {
-
-        // By default, just copy resource files over.
-        DataEntryReader resourceRewriter = resourceCopier;
-
-
-//        // Replace any resource files that we already have in memory.
-//        resourceRewriter =
-//                new InMemoryResourceFileReplacer(resourceInfo.resourceFilePool,
-//                        resourceWriter,
-//                        resourceRewriter);
-
-        return resourceRewriter;
-    }
-
 }
