@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2020 Guardsquare NV
+ * Copyright (c) 2002-2022 Guardsquare NV
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -22,10 +22,11 @@ package proguard;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import proguard.classfile.ClassConstants;
 import proguard.io.*;
 import proguard.util.*;
 import java.util.*;
+
+import static proguard.classfile.ClassConstants.*;
 
 /**
  * This class can create DataEntryReader instances based on class path entries.
@@ -41,11 +42,10 @@ public class DataEntryReaderFactory
     private static final String VERSIONS_PATTERN = "META-INF/versions";
     private static final String VERSIONS_EXCLUDE = "!META-INF/versions/**";
 
-    private static final String CLASS_FILE_PREFIX = "classes/";
+    private static final String JMOD_CLASS_FILE_PREFIX = "classes/";
 
 
     private final boolean android;
-    private final boolean verbose;
 
 
     /**
@@ -54,13 +54,10 @@ public class DataEntryReaderFactory
      * @param android Specifies whether the packaging is targeted at the
      *                Android platform. Archives inside the assets directory
      *                then aren't unpacked but simply read as data files.
-     * @param verbose Specifies if verbose messages should be emitted when
-     *                creating the DataEntryReader.
      */
-    public DataEntryReaderFactory(boolean android, boolean verbose)
+    public DataEntryReaderFactory(boolean android)
     {
         this.android = android;
-        this.verbose = verbose;
     }
 
     /**
@@ -76,6 +73,7 @@ public class DataEntryReaderFactory
                                                  ClassPathEntry  classPathEntry,
                                                  DataEntryReader reader)
     {
+        boolean isDex  = classPathEntry.isDex();
         boolean isApk  = classPathEntry.isApk();
         boolean isAab  = classPathEntry.isAab();
         boolean isJar  = classPathEntry.isJar();
@@ -97,7 +95,8 @@ public class DataEntryReaderFactory
 
         logger.info("{}{} [{}]{}",
                     messagePrefix,
-                    (isApk  ? "apk"  :
+                    (isDex  ? "dex"  :
+                     isApk  ? "apk"  :
                      isAab  ? "aab"  :
                      isJar  ? "jar"  :
                      isAar  ? "aar"  :
@@ -201,8 +200,8 @@ public class DataEntryReaderFactory
         if (stripClassesPrefix)
         {
             reader = new FilteredDataEntryReader(
-                new DataEntryNameFilter(new ExtensionMatcher(ClassConstants.CLASS_FILE_EXTENSION)),
-                new PrefixStrippingDataEntryReader(CLASS_FILE_PREFIX, reader),
+                new DataEntryNameFilter(new ExtensionMatcher(CLASS_FILE_EXTENSION)),
+                new PrefixStrippingDataEntryReader(JMOD_CLASS_FILE_PREFIX, reader),
                 reader);
         }
 
@@ -228,15 +227,19 @@ public class DataEntryReaderFactory
             StringMatcher jarMatcher =
                 new ExtensionMatcher(jarExtension);
 
-            // Don't unzip archives in Android assets directories.
+            // Don't unzip archives in Android assets or resources directories.
             if (android)
             {
                 jarMatcher =
-                    new AndMatcher(new NotMatcher(
-                                   new FixedStringMatcher("assets/",
-                                   new ConstantMatcher(true))),
+                    new AndMatcher(
+                        new AndMatcher(
+                            new NotMatcher(
+                            new ListParser(new FileNameParser()).parse("assets/**,*/assets/**")),
 
-                                   jarMatcher);
+                            new NotMatcher(
+                            new ListParser(new FileNameParser()).parse("res/**,*/res/**"))),
+
+                        jarMatcher);
             }
 
             // Only unzip the right type of jars.

@@ -22,7 +22,6 @@ package proguard;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import proguard.classfile.kotlin.KotlinConstants;
 import proguard.classfile.util.WarningLogger;
 import proguard.classfile.util.WarningPrinter;
 import proguard.classfile.visitor.ClassPoolFiller;
@@ -46,7 +45,6 @@ import proguard.resources.file.visitor.MultiResourceFileVisitor;
 import proguard.resources.file.visitor.ResourceFilePoolFiller;
 import proguard.resources.file.visitor.ResourceFilePresenceFilter;
 import proguard.resources.file.visitor.ResourceFileVisitor;
-import proguard.resources.kotlinmodule.io.KotlinModuleDataEntryReader;
 import proguard.util.FileNameParser;
 import proguard.util.ListParser;
 import proguard.util.ProcessingFlagSetter;
@@ -292,7 +290,7 @@ public class InputReader implements Pass
         {
             // Create a reader that can unwrap jars, wars, ears, jmods and zips.
             DataEntryReader reader =
-                new DataEntryReaderFactory(configuration.android, configuration.verbose)
+                new DataEntryReaderFactory(configuration.android)
                     .createDataEntryReader(messagePrefix,
                                            classPathEntry,
                                            dataEntryReader);

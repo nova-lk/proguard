@@ -120,8 +120,7 @@ public class OutputWriter implements Pass
                                        configuration.android, //resourceInfo.pageAlignNativeLibs,
                                        configuration.obfuscate,
                                        privateKeyEntries,
-                                       configuration.verbose,
-                                       dexDataEntryWriterFactory);
+                                       dexDataEntryWriterFactory == null ? null : dexDataEntryWriterFactory::wrapInDexWriter);
 
 
         DataEntryWriter extraDataEntryWriter = null;

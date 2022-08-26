@@ -26,9 +26,9 @@ dependencies {
     implementation 'org.apache.logging.log4j:log4j-api:2.17.1'
     implementation 'org.apache.logging.log4j:log4j-core:2.17.1'
     implementation 'org.json:json:20211205'
-    implementation 'org.smali:smali:2.5.2'
-    implementation 'com.android.tools:r8:3.3.28'
-    implementation "com.guardsquare:proguard-core-android:2.1-SNAPSHOT"
+//    implementation 'org.smali:smali:2.5.2'
+//    implementation 'com.android.tools:r8:3.3.28'
+    implementation "com.guardsquare:proguard-core-android"
 
     testImplementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
     testImplementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"

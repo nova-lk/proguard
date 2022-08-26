@@ -94,14 +94,14 @@ public class ProGuard
 
             if (configuration.printConfiguration != null)
             {
-                printConfiguration();
+//                printConfiguration();
             }
 
-            checkConfiguration();
+            //checkConfiguration();
 
             if (configuration.programJars.hasOutput())
             {
-                checkUpToDate();
+           //     checkUpToDate();
             }
 
             if (configuration.targetClassVersion != 0)
@@ -116,7 +116,7 @@ public class ProGuard
                 configuration.obfuscate ||
                 configuration.preverify)
             {
-                clearPreverification();
+//                clearPreverification();
             }
 
             if (configuration.printSeeds != null        ||
@@ -132,7 +132,7 @@ public class ProGuard
                 mark();
             }
 
-            checkConfigurationAfterInitialization();
+//            checkConfigurationAfterInitialization();
 
             if (configuration.addConfigurationDebugging)
             {
@@ -143,39 +143,39 @@ public class ProGuard
 
             if (configuration.keepKotlinMetadata)
             {
-                stripKotlinMetadataAnnotations();
+//                stripKotlinMetadataAnnotations();
             }
 
             if (configuration.optimize ||
                 configuration.obfuscate)
             {
-                introducePrimitiveArrayConstants();
+//                introducePrimitiveArrayConstants();
             }
 
             if (configuration.backport)
             {
-                backport();
+//                backport();
             }
 
             if (configuration.addConfigurationDebugging)
             {
-                addConfigurationLogging();
+//                addConfigurationLogging();
             }
 
             if (configuration.printSeeds != null)
             {
-                printSeeds();
+//                printSeeds();
             }
 
             if (configuration.preverify ||
                 configuration.android)
             {
-                inlineSubroutines();
+//                inlineSubroutines();
             }
 
             if (configuration.shrink)
             {
-                shrink(false);
+//                shrink(false);
             }
 
             // Create a matcher for filtering optimizations.
@@ -186,23 +186,23 @@ public class ProGuard
             if (configuration.optimize &&
                 filter.matches(Optimizer.LIBRARY_GSON))
             {
-                optimizeGson();
+//                optimizeGson();
             }
 
             if (configuration.optimize)
             {
-                optimize();
-                linearizeLineNumbers();
+//                optimize();
+//                linearizeLineNumbers();
             }
 
             if (configuration.obfuscate)
             {
-                obfuscate();
+//                obfuscate();
             }
 
             if (configuration.keepKotlinMetadata)
             {
-                adaptKotlinMetadata();
+//                adaptKotlinMetadata();
             }
 
             if (configuration.optimize ||
@@ -218,7 +218,7 @@ public class ProGuard
 
             if (configuration.preverify)
             {
-                preverify();
+//                preverify();
             }
 
             // Trim line numbers after preverification as this might
@@ -226,7 +226,7 @@ public class ProGuard
             if (configuration.optimize ||
                 configuration.preverify)
             {
-                trimLineNumbers();
+//                trimLineNumbers();
             }
 
             if (configuration.shrink    ||
@@ -234,7 +234,7 @@ public class ProGuard
                 configuration.obfuscate ||
                 configuration.preverify)
             {
-                sortClassElements();
+//                sortClassElements();
             }
             if (configuration.dump != null)
             {

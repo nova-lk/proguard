@@ -1,34 +1,40 @@
-import com.android.tools.r8.CompilationFailedException;
+
 import proguard.AppView;
 
 
 import proguard.ClassPath;
 import proguard.ClassPathEntry;
 import proguard.Configuration;
+import proguard.Initializer;
 import proguard.InputReader;
 import proguard.OutputWriter;
 import proguard.classfile.ClassPool;
+import proguard.classfile.util.PrimitiveArrayConstantReplacer;
+import proguard.classfile.visitor.ClassPrinter;
+import proguard.mark.Marker;
 
 import java.io.File;
 import java.io.IOException;
 
 public class TestRun {
 
-    public static void main(String[] args) throws CompilationFailedException, IOException {
+    public static void main(String[] args) throws IOException {
 
 //        String inputPath = "/home/pramitha/Downloads/classes.dex";
 //        String inputPath = "/home/pramitha/Downloads/test1.jar";
 //        String inputPath = "/home/pramitha/Downloads/SmaliSamples";
 
-        File inputFile = new File("/home/pramitha/Downloads/app2.apk");
+        File inputFile = new File("/home/pramitha/Downloads/apprelease.apk");
         File outputFile = new File("/home/pramitha/Downloads/DexOut/output/out.apk");
-        File outputDex = new File("/home/pramitha/Downloads/DexOut/output/");
+        File libraryFile = new File("/home/pramitha/Android/Sdk/platforms/android-33/android.jar");
+
 
         ClassPath programFilePaths = new ClassPath();
         ClassPath libraryClassPaths = new ClassPath();
 
         programFilePaths.add(new ClassPathEntry(inputFile, false));
         programFilePaths.add(new ClassPathEntry(outputFile, true));
+        libraryClassPaths.add(new ClassPathEntry(libraryFile, false));
 
         ClassPool programClassPool = new ClassPool();
         ClassPool libraryClassPool = new ClassPool();
@@ -38,6 +44,8 @@ public class TestRun {
         configuration.libraryJars = libraryClassPaths;
         configuration.android = true;
         configuration.dalvik = true;
+        configuration.preverify = false;
+        configuration.ignoreWarnings = true;
 
         AppView appView = new AppView();
         appView.programClassPool = programClassPool;
@@ -45,9 +53,12 @@ public class TestRun {
 
         new InputReader(configuration)
                 .execute(appView);
+//        new Initializer(configuration).execute(appView);
+//        new Marker(configuration).execute(appView);
+        appView.programClassPool.classesAccept(new PrimitiveArrayConstantReplacer());
 
-//        libraryClassPool.classesAccept(new ClassPrinter());
-//        programClassPool.classesAccept(new ClassPrinter());
+   /*     libraryClassPool.classesAccept(new ClassPrinter());
+        programClassPool.classesAccept(new ClassPrinter());*/
 
         new OutputWriter(configuration)
                 .execute(appView);
