@@ -1,17 +1,10 @@
-
 import proguard.AppView;
-
-
 import proguard.ClassPath;
 import proguard.ClassPathEntry;
 import proguard.Configuration;
-import proguard.Initializer;
 import proguard.InputReader;
 import proguard.OutputWriter;
 import proguard.classfile.ClassPool;
-import proguard.classfile.util.PrimitiveArrayConstantReplacer;
-import proguard.classfile.visitor.ClassPrinter;
-import proguard.mark.Marker;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,10 +12,6 @@ import java.io.IOException;
 public class TestRun {
 
     public static void main(String[] args) throws IOException {
-
-//        String inputPath = "/home/pramitha/Downloads/classes.dex";
-//        String inputPath = "/home/pramitha/Downloads/test1.jar";
-//        String inputPath = "/home/pramitha/Downloads/SmaliSamples";
 
         File inputFile = new File("/home/pramitha/Downloads/apprelease.apk");
         File outputFile = new File("/home/pramitha/Downloads/DexOut/output/out.apk");
@@ -53,12 +42,9 @@ public class TestRun {
 
         new InputReader(configuration)
                 .execute(appView);
-//        new Initializer(configuration).execute(appView);
-//        new Marker(configuration).execute(appView);
-        appView.programClassPool.classesAccept(new PrimitiveArrayConstantReplacer());
 
-   /*     libraryClassPool.classesAccept(new ClassPrinter());
-        programClassPool.classesAccept(new ClassPrinter());*/
+//        libraryClassPool.classesAccept(new ClassPrinter());
+//        programClassPool.classesAccept(new ClassPrinter());
 
         new OutputWriter(configuration)
                 .execute(appView);
